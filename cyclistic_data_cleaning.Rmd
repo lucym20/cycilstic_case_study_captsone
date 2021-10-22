@@ -1,0 +1,260 @@
+---
+title: "Cyclistic_Data_Cleaning"
+author: "Lucy M"
+date: "10/19/2021"
+output: html_document
+---
+
+# 1. Data Cleaning Documentation
+
+This R markdown outlines what I did to sort and clean the raw data for "Cyclistic", a ficticious company used for the Google Data Analytics Certificate capstone. The data has been collected and shared by Motivate International Inc, who operate the Divvy bicycle program in Chicago. 
+
+```{r echo = T, results = 'hide'}
+#install.packages("tidyverse")
+library(tidyverse)
+#install.packages("here")
+library(here)
+#install.packages("skimr")
+library(skimr)
+#install.packages("janitor")
+library(janitor)
+#install.packages("dplyr")
+library(dplyr)
+library(knitr)
+library(data.table)
+library(readr)
+```
+# 2. Combine Data
+
+For this project I've downloaded csv files with raw data from Oct 2020-Sept 2021, where each file represents one month of data. Each file contains thousands of rows, and is therefore too large to process in excel or SQL. 
+
+#### Load data
+
+```{r echo = T, results = 'hide'}
+
+Oct_20 <- read_csv("C:\\Users\\Lucy Miller\\Documents\\capstone\\Cyclistic_raw_data\\202010\\202010-divvy-tripdata.csv")
+Nov_20 <- read_csv("C:\\Users\\Lucy Miller\\Documents\\capstone\\Cyclistic_raw_data\\202011\\202011-divvy-tripdata.csv")
+Dec_20 <- read_csv("C:\\Users\\Lucy Miller\\Documents\\capstone\\Cyclistic_raw_data\\202012\\202012-divvy-tripdata.csv")
+Jan_21 <- read_csv("C:\\Users\\Lucy Miller\\Documents\\capstone\\Cyclistic_raw_data\\202101\\202101-divvy-tripdata.csv")
+Feb_21 <- read_csv("C:\\Users\\Lucy Miller\\Documents\\capstone\\Cyclistic_raw_data\\202102\\202102-divvy-tripdata.csv")
+Mar_21 <- read_csv("C:\\Users\\Lucy Miller\\Documents\\capstone\\Cyclistic_raw_data\\202103\\202103-divvy-tripdata.csv")
+Apr_21 <- read_csv("C:\\Users\\Lucy Miller\\Documents\\capstone\\Cyclistic_raw_data\\202104\\202104-divvy-tripdata.csv")
+May_21 <- read_csv("C:\\Users\\Lucy Miller\\Documents\\capstone\\Cyclistic_raw_data\\202105\\202105-divvy-tripdata.csv")
+Jun_21 <- read_csv("C:\\Users\\Lucy Miller\\Documents\\capstone\\Cyclistic_raw_data\\202106\\202106-divvy-tripdata.csv")
+Jul_21 <- read_csv("C:\\Users\\Lucy Miller\\Documents\\capstone\\Cyclistic_raw_data\\202107\\202107-divvy-tripdata.csv")
+Aug_21 <- read_csv("C:\\Users\\Lucy Miller\\Documents\\capstone\\Cyclistic_raw_data\\202108\\202108-divvy-tripdata.csv")
+Sep_21 <- read_csv("C:\\Users\\Lucy Miller\\Documents\\capstone\\Cyclistic_raw_data\\202109\\202109-divvy-tripdata.csv")
+```
+
+
+# 3. Clean Data
+#### Check structure summary of 2020 rides
+```{r echo = T, results = 'hide'}
+str(Oct_20)
+str(Nov_20)
+str(Dec_20)
+str(Jan_21)
+str(Feb_21)
+str(Mar_21)
+str(Apr_21)
+str(May_21)
+str(Jun_21)
+str(Jul_21)
+str(Aug_21)
+str(Sep_21)
+```
+
+Some months show that the start_station_id and the end_station_id are 'int' strings types, but as there are alphanumeric values in these columns this must be changed to 'chr'.
+
+```{r change 2020 string types}
+Oct_20 <- mutate(
+  Oct_20, 
+  start_station_id = as.character(start_station_id),
+  end_station_id = as.character(end_station_id)
+  )
+Nov_20 <- mutate(
+  Nov_20, 
+  start_station_id = as.character(start_station_id),
+  end_station_id = as.character(end_station_id)
+  )
+Dec_20 <- mutate(
+  Dec_20, 
+  start_station_id = as.character(start_station_id),
+  end_station_id = as.character(end_station_id)
+  )
+```
+
+All dates are also currently in 'chr' string type and should be changed to date type. This will be done after combining file for efficiency. 
+
+# 4. Merge Data
+
+```{r}
+all_trips <- bind_rows(Oct_20, Nov_20, Dec_20, Jan_21, Feb_21, Mar_21, Apr_21, May_21, Jun_21, Jul_21, Aug_21, Sep_21)
+```
+
+Check that merge worked well:
+
+```{r echo = T, results = 'hide'}
+str(all_trips)
+```
+
+# 5. Prepare Data for Cleaning
+
+#### Sort by Date
+
+```{r}
+all_trips <- all_trips %>%
+  arrange(started_at)
+
+glimpse(all_trips)
+
+```
+
+
+# 6. Clean Data
+
+#### Calculate Ride Length
+Ride length is calculated by the difference between end and start time. This is done during the cleaning process to ensure that the new variable is also cleaned. The units will be seconds as it will be easy to see ride length differences on data frame review. 
+```{r echo = T, results = 'hide'}
+
+all_trips$ride_length <- difftime(
+  all_trips$ended_at, 
+  all_trips$started_at,
+  units = "secs")
+
+all_trips$ride_length <- as.numeric(
+  as.character(all_trips$ride_length))
+
+str(all_trips)
+```
+
+#### Create Weekday Column
+This new data column was requested by the case study, and will check the dates to populate the corresponding weekday values.
+```{r}
+all_trips$day_of_week <- format(
+  all_trips$started_at, 
+  "%A")
+```
+
+#### Create Month Column
+This new data column will be helpful for analysis in finding trends based on time of year/seasons.
+```{r}
+all_trips$month <- format(
+    all_trips$started_at, 
+    "%B")
+```
+
+
+#### Remove Nulls
+There were many instances where the station names and ids were null, so those rows must be removed to keep data accurate. The volume of data available means that we still have plenty to work with. 
+```{r}
+all_trips_cleaned <- all_trips %>%
+    filter(
+      !(is.na(start_station_name) |
+          start_station_name == "")
+      ) %>% 
+  
+  filter(
+    !(is.na(end_station_name) |
+        end_station_name == ""))
+```
+
+#### Remove Negative Duration Trips Rides
+```{r}
+all_trips_cleaned <- all_trips_cleaned %>%
+  filter(!(ride_length < 0))
+```
+
+#### Remove Trips Under 1 Minute
+It is safe to assume that rides relevant to our analysis will be longer than a minute, so I will further clean the data to remove any rides shorter than 1 minute.
+
+``` {r remove rides shorter than 1 minute}
+all_trips_cleaned <- all_trips_cleaned %>%
+  filter(!(ride_length < 60))
+
+```
+
+#### Remove Trips Longer than 24 Hours
+Any trips longer than 24 hours are likely the result of people forgetting to return the bikes. It would be a good idea to confirm the rental limits with the company if possible, but this is an assumption I am working with. 
+```{r}
+all_trips_cleaned <- all_trips_cleaned %>%
+  filter(!(ride_length > 86400))
+```
+
+
+#### Standardize Variable Names
+In the csv file some of the station names were in all caps, which could cause issues for analysis later. We check to see how many remain after previous filtering.
+```{r}
+caps_check <- all_trips_cleaned %>%
+  
+  filter(
+    str_detect(start_station_name, "[:upper:]")
+    & !str_detect(start_station_name,"[:lower:]")
+    ) %>%
+  
+  group_by(
+    start_station_name
+    ) %>%
+  
+  count(
+    start_station_name)
+
+```
+
+A few remain but they seem to be for "testing" or "checking"- this should be removed from the cleaned data.
+
+```{r}
+all_trips_cleaned <- all_trips_cleaned %>%
+    filter(
+      !(str_detect(start_station_name, "[:upper:]")
+        & !str_detect(start_station_name, "[:lower:]")))
+```
+
+
+#### Remove Duplicates
+
+The best way to check for duplicates is by the ride_id column as this is a unique identifier.
+```{r}
+id_duplicates <- all_trips_cleaned %>%
+  count(ride_id) %>%
+  filter(n > 1)
+```
+
+There were no duplicates found in the all_trips data set. 
+
+#### Separate Date and Time
+```{r}
+#library(lubridate)
+
+all_trips_cleaned <- separate(all_trips_cleaned, started_at, into=c('start_date', 'start_time'), sep=" ")
+
+all_trips_cleaned <- separate(all_trips_cleaned, ended_at, into=c('end_date', 'end_time'), sep=" ")
+
+str(all_trips_cleaned)
+```
+
+#### Update Date str types from 'chr' to 'date
+```{r echo = T, results = 'hide'}
+all_trips_cleaned$start_date <- as.Date(
+  all_trips_cleaned$start_date, 
+  format = "%Y-%m-%d")
+
+all_trips_cleaned$end_date <- as.Date(
+  all_trips_cleaned$end_date, 
+  format = "%Y-%m-%d")
+
+skim_without_charts(all_trips_cleaned)
+
+```
+
+
+# Save Cleaned Data as csv for Analysis
+```{r}
+fwrite(
+  all_trips_cleaned, 
+  "C:\\Users\\Lucy Miller\\Documents\\capstone\\Cyclistic_raw_data\\all_trips_cleaned.csv", 
+  col.names = TRUE,
+  row.names = FALSE)
+```
+#### Notes on Station IDs
+There is a lot of inconsistency and variety in naming conventions for start and end station ids. Without being able to question the company about the data, I am moving forward with the assumption that these are all correct based on the fact that they seem to at least all be unique to each station.  

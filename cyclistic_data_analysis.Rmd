@@ -1,0 +1,234 @@
+---
+title: "Cyclistic_Data_Analysis"
+author: "Lucy M"
+date: "10/19/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE, cache = FALSE}
+
+#install.packages("tidyverse")
+library(tidyverse)
+library(dplyr)
+library(data.table)
+library(readr)
+library(ggplot2)
+library(lubridate)
+```
+ 
+# Upload Cleaned Data csv
+
+
+```{r}
+all_trips_cleaned <- read_csv("C:\\Users\\Lucy Miller\\Documents\\capstone\\all_trips_cleaned.csv")
+```
+# Data Analysis
+
+#### Calculate the Average Ride Length
+
+
+```{r calculate mean}
+x <- all_trips_cleaned %>% 
+  pull(ride_length)
+
+mean_ride_length <- mean(x)
+
+mean_ride_length_min <- mean_ride_length/60
+```
+
+Mean ride length returned = 1250.4517582857 seconds, or 20.84 minutes
+
+#### Calculate Avergage Ride Length of Member vs Casual Riders
+
+
+```{r}
+mean_cas_mem <- aggregate(all_trips_cleaned$ride_length, by=list("rider_status"=all_trips_cleaned$member_casual), FUN=mean)
+```
+
+The average member ride = 831.0781 seconds and the average casual ride = 1758.1184 seconds
+
+
+#### Calculate the Max Ride Length
+
+
+``` {r max ride length}
+max_ride_length <- max(x)
+
+max_ride_length_min <- max(x)/60
+```
+
+Max ride length returned as 86394 seconds, or 1439.9 minutes. 
+
+#### Calculate the Min Ride Length
+
+
+```{r min ride length}
+min_ride_length <- min(x)
+
+```
+
+The min ride length returned as 60 seconds. This is likely an error made buy someone at the bike port, but since we already cleaned out events that were less than a minute long we don't want to assume anything else without further confirmation from the company. 
+
+#### Calculate the Mode Day of the Week
+
+
+``` {r mode day of the the week}
+calculate_mode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]}
+   
+trips_mode <-calculate_mode(all_trips_cleaned$day_of_week)
+
+```
+
+
+The most commonly occurring day of the week is Saturday. 
+
+
+#### Average Ride Length By Day of Week and Member Status
+
+
+```{r}
+aggregate(all_trips_cleaned$ride_length, by=list("day_of_week"=all_trips_cleaned$day_of_week,"rider status"=all_trips_cleaned$member_casual), FUN=mean)
+
+mean_ride_by_day <- aggregate(all_trips_cleaned$ride_length, by=list("day_of_week"=all_trips_cleaned$day_of_week,"rider_status"=all_trips_cleaned$member_casual), FUN=mean)
+
+mean_ride_by_day$day_of_week<- factor(mean_ride_by_day$day_of_week, levels=c("Monday",
+    "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday","Sunday"))
+mean_ride_by_day <- mean_ride_by_day[order(mean_ride_by_day$day_of_week),]
+
+```
+
+```{r}
+ggplot(data=mean_ride_by_day, aes(x = day_of_week , y= x, fill= rider_status))+geom_bar(stat = "identity")+ggtitle(label = "Average Rides by Day by Rider Status")+theme_minimal()+theme(plot.title = element_text(hjust = 0.5, lineheight = 0.8, face = "bold"))+xlab("Weekday")+ylab("Length of Ride (secs)")
+```
+
+
+#### Average Ride Length by Month and Member Status
+
+
+```{r calculate avg per month by rider status}
+
+
+aggregate(all_trips_cleaned$ride_length, by=list("month"=all_trips_cleaned$month,"rider status"=all_trips_cleaned$member_casual), FUN=mean)
+
+mean_ride_by_month <- aggregate(all_trips_cleaned$ride_length, by=list("month"=all_trips_cleaned$month,"rider_status"=all_trips_cleaned$member_casual), FUN=mean)
+
+mean_ride_by_month$month<- factor(mean_ride_by_month$month, levels=c("October",
+    "November", "December", "January", "February", "March","May", "June", "July", "August", "September"))
+mean_ride_by_month <- mean_ride_by_month[order(mean_ride_by_month$month),]
+```
+
+
+For some reason nulls have shown up in the 'month' column, so I will remove these before creating visualization. 
+
+
+```{r}
+mean_ride_by_month <- mean_ride_by_month %>%
+    filter(
+      !(is.na(month) |
+          month == ""))
+```
+
+
+
+```{r}
+ggplot(data=mean_ride_by_month, aes(x = month, y= x, fill= rider_status))+geom_bar(stat = "identity")+ggtitle(label = "Average Rides by Month by Rider Status")+theme_minimal()+theme(plot.title = element_text(hjust = 0.5, lineheight = 0.8, face = "bold"))+xlab("Month")+ylab("Length of Ride (secs)")+theme(axis.text.x = element_text(angle = 45, hjust=1))
+```
+
+
+#### Determine Most Popular Stations
+
+
+``` {r mode start and end stations}
+
+calculate_mode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]}
+   
+start_station_mode <-calculate_mode(all_trips_cleaned$start_station_name)
+
+end_station_mode <- calculate_mode(all_trips_cleaned$end_station_name)
+```
+
+
+Over the last 12 months, the most popular start AND end station is 'Streeter Dr $ Grand Ave'.
+
+
+#### Determine Most Popular Times of Day
+
+
+```{r}
+all_trips_cleaned$start_time <- as.POSIXlt(all_trips_cleaned$start_time, format = "%H:%M:%S")
+
+
+all_trips_cleaned$by_hour <- cut(
+  all_trips_cleaned$start_time, 
+  breaks = "60 mins")
+
+
+num_trips_by_hour <- all_trips_cleaned %>%
+  
+  group_by(
+    by_hour,
+    member_casual
+  ) %>%
+  
+  mutate(
+    num_trips = (n()/1000)
+  ) %>%
+  
+  distinct(
+    by_hour, 
+    member_casual, 
+    num_trips)
+
+num_trips_by_hour <- separate(num_trips_by_hour, by_hour, into=c('by_date', 'by_hour'), sep=" ")
+```
+
+
+```{r}
+ggplot(data=num_trips_by_hour, aes(x = by_hour, y= num_trips, fill=member_casual))+geom_bar(stat = "identity")+ggtitle(label = "Trips per Hour by Member Status")+theme_minimal()+theme(plot.title = element_text(hjust = 0.5, lineheight = 0.8, face = "bold"))+xlab("Hour (24hr)")+ylab("Count")+theme(axis.text.x = element_text(angle = 45, hjust=1))
+```
+#### Bike Type Preference by Rider Type
+
+
+```{r}
+calculate_mode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]}
+   
+bike_type <-calculate_mode(all_trips_cleaned$rideable_type)
+  
+mem_bike <- filter(all_trips_cleaned, member_casual == "member")
+             
+calculate_mode(mem_bike$rideable_type)   
+  
+cas_bike <- filter(all_trips_cleaned, member_casual =="casual")
+
+calculate_mode(cas_bike$rideable_type)
+```
+
+Both group prefer the classic bike. 
+
+#### Ensure Data is Presentable and Ready for Further Analysis
+
+
+```{r}
+all_trips_cleaned <- separate(all_trips_cleaned, by_hour, into=c('by_date', 'by_hour'), sep=" ")
+
+all_trips_cleaned <- separate(all_trips_cleaned,start_time, into=c('delete', 'start_time'), sep=" ")
+
+all_trips_cleaned <- subset(all_trips_cleaned, select =- c(delete, by_date))
+```
+
+# Save Final csv File
+
+
+```{r}
+fwrite(
+  all_trips_cleaned, 
+  "C:\\Users\\Lucy Miller\\Documents\\capstone\\all_trips_final.csv", 
+  col.names = TRUE,
+  row.names = FALSE)
+```
